@@ -26,4 +26,4 @@
 - Notas baixas, 1 ou 2 estrelas, representam 8.09% da amostra, sugerindo vies de avaliacao mais positivo na plataforma.
 - A comparacao entre media de nota e volume de avaliacoes ajuda a separar livros populares de livros realmente bem avaliados.
 - A variavel `to_read_count` mostra demanda futura: alguns livros aparecem com alto interesse mesmo quando nao lideram o ranking de avaliacoes ja feitas.
-- A coleta externa da Open Library trouxe quantidade de paginas para 168 livros da amostra coletada.
+- A coleta externa da Open Library trouxe quantidade de paginas para 360 livros da amostra coletada.

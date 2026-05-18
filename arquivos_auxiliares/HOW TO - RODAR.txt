@@ -1,0 +1,94 @@
+HOW TO - RODAR
+Projeto Final - Dashboard Goodreads + Open Library
+
+1. Abrir o terminal na pasta do projeto
+
+cd "C:\Users\marin\OneDrive\Documentos\PUCCAMP\5. Sems\Estudos Avançados de Banco de Dados\DASHBOARD - TRABALHO"
+
+
+2. Ativar o ambiente virtual
+
+.\.venv\Scripts\Activate.ps1
+
+Se o PowerShell bloquear a ativacao, rode:
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+
+
+3. Instalar as dependencias
+
+python -m pip install -r requirements.txt
+
+
+4. Coletar dados externos da Open Library
+
+python collect_openlibrary_data.py
+
+Esse comando cria/atualiza:
+
+data\external\openlibrary_books.csv
+
+Observacao:
+Se a internet falhar, rode o comando novamente. O script continua a coleta sem duplicar os ISBNs ja salvos.
+
+
+5. Preparar os dados processados
+
+python prepare_data.py
+
+Esse comando cria/atualiza:
+
+data\processed\books_enriched.csv
+data\processed\ratings_distribution.csv
+data\processed\author_summary.csv
+apresentacao\relatorio_insights.md
+
+
+6. Rodar o dashboard
+
+python app.py
+
+
+7. Abrir no navegador
+
+http://127.0.0.1:8050
+
+
+8. Opcional: abrir o notebook da parte de ciencia de dados
+
+jupyter notebook analise_processamento_goodreads.ipynb
+
+
+ORDEM RESUMIDA DOS COMANDOS
+
+cd "C:\Users\marin\OneDrive\Documentos\PUCCAMP\5. Sems\Estudos Avançados de Banco de Dados\DASHBOARD - TRABALHO"
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python collect_openlibrary_data.py
+python prepare_data.py
+python app.py
+
+
+ARQUIVOS PRINCIPAIS
+
+app.py
+Dashboard interativo em Dash.
+
+prepare_data.py
+Pipeline de tratamento, merge, limpeza e criacao de variaveis.
+
+collect_openlibrary_data.py
+Script de coleta externa usando a API publica da Open Library por ISBN.
+
+analise_processamento_goodreads.ipynb
+Notebook com a parte de ciencia de dados explicada passo a passo.
+
+data\raw\
+Arquivos originais Goodreads.
+
+data\external\
+Dados coletados da Open Library.
+
+data\processed\
+Dados finais usados pelo dashboard.

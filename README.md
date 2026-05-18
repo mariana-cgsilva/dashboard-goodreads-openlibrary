@@ -15,12 +15,14 @@ Tema: analise de popularidade, qualidade e interesse futuro em livros da base Go
 - `data/raw/`: arquivos brutos usados no projeto.
 - `data/external/`: arquivo coletado da Open Library, gerado pelo script de coleta.
 - `data/processed/`: arquivos gerados pelo pipeline.
+- `apresentacao/`: roteiro de apresentacao e relatorio automatico de insights.
+- `arquivos_auxiliares/`: arquivos de apoio, enunciado, logs e caches.
 - `analise_processamento_goodreads.ipynb`: notebook com a etapa didatica de leitura, exploracao, limpeza, transformacao, merge, criacao de variaveis e exportacao dos dados.
 - `collect_openlibrary_data.py`: script de coleta de metadados externos por ISBN na API publica Open Library.
 - `prepare_data.py`: prepara, integra e transforma os dados.
 - `app.py`: dashboard em Dash.
-- `relatorio_insights.md`: resumo gerado com os principais achados.
-- `roteiro_apresentacao.md`: sugestao de fala para a apresentacao.
+- `apresentacao/relatorio_insights.md`: resumo gerado com os principais achados.
+- `apresentacao/roteiro_apresentacao.md`: sugestao de fala para a apresentacao.
 
 ## Como executar
 

@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent
 RAW_DIR = BASE_DIR / "data" / "raw"
 EXTERNAL_DIR = BASE_DIR / "data" / "external"
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
+PRESENTATION_DIR = BASE_DIR / "apresentacao"
 
 BOOKS_PATH = RAW_DIR / "books.csv"
 RATINGS_PATH = RAW_DIR / "ratings.csv"
@@ -316,7 +317,8 @@ def write_insights(books, ratings_distribution):
         books_with_pages = books["page_count"].notna().sum()
         lines.append(f"- A coleta externa da Open Library trouxe quantidade de paginas para {books_with_pages} livros da amostra coletada.")
 
-    (BASE_DIR / "relatorio_insights.md").write_text("\n".join(lines), encoding="utf-8")
+    PRESENTATION_DIR.mkdir(parents=True, exist_ok=True)
+    (PRESENTATION_DIR / "relatorio_insights.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():
@@ -353,7 +355,7 @@ def main():
     write_insights(books, ratings_distribution)
 
     print("Arquivos processados criados em data/processed.")
-    print("Relatorio de insights criado em relatorio_insights.md.")
+    print("Relatorio de insights criado em apresentacao/relatorio_insights.md.")
 
 
 if __name__ == "__main__":

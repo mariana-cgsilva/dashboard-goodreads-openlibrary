@@ -50,12 +50,15 @@ def apply_theme(fig, height=360):
         template="plotly_white",
         colorway=COLORWAY,
         height=height,
-        margin=dict(l=30, r=20, t=55, b=35),
+        margin=dict(l=34, r=24, t=58, b=42),
         font=dict(family="Segoe UI, Arial, sans-serif", size=13),
         legend_title_text="",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        title_font=dict(size=17, color="#12263A"),
     )
-    fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(gridcolor="#E9EDF3")
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D8E0EA", tickfont=dict(color="#526477"))
+    fig.update_yaxes(gridcolor="#E7EDF5", zeroline=False, linecolor="#D8E0EA", tickfont=dict(color="#526477"))
     return fig
 
 
@@ -77,6 +80,18 @@ def graph_card(title, graph_id=None, figure=None, children=None, class_name="pan
 
 def format_int(value):
     return f"{int(value):,}".replace(",", ".")
+
+
+def selected_period_label(year_range):
+    if not year_range or year_range[0] <= min_year and year_range[1] >= max_year:
+        return "Todos os anos"
+    return f"{int(year_range[0])} a {int(year_range[1])}"
+
+
+def selected_rating_label(min_rating):
+    if min_rating is None or min_rating <= 0:
+        return "Sem nota minima"
+    return f"Nota >= {min_rating:.1f}"
 
 
 def overview_tab():
@@ -116,6 +131,8 @@ def overview_tab():
         .agg(books=("book_id", "count"), avg_rating=("average_rating", "mean"))
         .query("books >= 20")
     )
+    decade_summary["decade_start"] = decade_summary["decade"].str.replace("s", "", regex=False).astype(int)
+    decade_summary = decade_summary.sort_values("decade_start")
     fig_decade = px.line(
         decade_summary,
         x="decade",
@@ -177,7 +194,7 @@ def overview_tab():
                 children=[
                     metric_card("Livros analisados", format_int(total_books), "catalogo integrado"),
                     metric_card("Avaliacoes da amostra", format_int(total_ratings), "ratings.csv"),
-                    metric_card("Marcados para ler", format_int(total_to_read), "to_read.csv"),
+                    metric_card("Querem ler", format_int(total_to_read), "interesse futuro"),
                     metric_card("Nota media ponderada", f"{avg_rating:.2f}", "peso por volume de ratings"),
                     metric_card("Open Library", format_int(books_with_pages), "livros com paginas coletadas"),
                 ],
@@ -189,7 +206,7 @@ def overview_tab():
                     graph_card("Distribuicao de notas", figure=fig_dist),
                     graph_card("Evolucao por decada", figure=fig_decade),
                     graph_card("Idiomas da base", figure=fig_language),
-                    graph_card("Tamanho dos livros", figure=fig_pages),
+                    graph_card("Tamanho dos livros", figure=fig_pages, class_name="panel wide"),
                 ],
             ),
         ],
@@ -203,21 +220,28 @@ def exploration_tab():
             html.Aside(
                 className="filters",
                 children=[
-                    html.H3("Filtros"),
-                    html.Label("Idiomas"),
+                    html.Div(
+                        className="filters-title",
+                        children=[
+                            html.H3("Filtros"),
+                            html.Span("Limpe um campo para analisar tudo"),
+                        ],
+                    ),
+                    html.Div(className="filter-label-row", children=[html.Label("Idiomas"), html.Strong("Todos", id="language-filter-label")]),
                     dcc.Dropdown(
                         id="language-filter",
                         options=[{"label": language, "value": language} for language in available_languages],
-                        value=["Ingles"],
+                        value=[],
                         multi=True,
-                        clearable=False,
+                        clearable=True,
+                        placeholder="Todos os idiomas",
                     ),
-                    html.Label("Periodo de publicacao"),
+                    html.Div(className="filter-label-row", children=[html.Label("Periodo de publicacao"), html.Strong(id="year-filter-label")]),
                     dcc.RangeSlider(
                         id="year-filter",
                         min=min_year,
                         max=max_year,
-                        value=[1950, max_year],
+                        value=[min_year, max_year],
                         step=1,
                         marks={
                             min_year: str(min_year),
@@ -226,15 +250,17 @@ def exploration_tab():
                             max_year: str(max_year),
                         },
                         tooltip={"placement": "bottom", "always_visible": False},
+                        allowCross=False,
                     ),
-                    html.Label("Nota media minima"),
+                    html.Div(className="filter-label-row", children=[html.Label("Nota media minima"), html.Strong(id="rating-filter-label")]),
                     dcc.Slider(
                         id="rating-filter",
-                        min=2.5,
+                        min=0,
                         max=5.0,
                         step=0.1,
-                        value=3.5,
-                        marks={2.5: "2.5", 3.5: "3.5", 4.5: "4.5", 5.0: "5.0"},
+                        value=0,
+                        marks={0: "Sem filtro", 2.5: "2.5", 3.5: "3.5", 4.5: "4.5", 5.0: "5.0"},
+                        tooltip={"placement": "bottom", "always_visible": False},
                     ),
                     html.Label("Ordenar ranking por"),
                     dcc.RadioItems(
@@ -242,7 +268,7 @@ def exploration_tab():
                         options=[
                             {"label": "Score", "value": "popularity_score"},
                             {"label": "Nota ponderada", "value": "weighted_score"},
-                            {"label": "Interesse futuro", "value": "to_read_count"},
+                            {"label": "Querem ler", "value": "to_read_count"},
                         ],
                         value="popularity_score",
                         className="radio-list",
@@ -313,6 +339,19 @@ def render_tab(tab):
 
 
 @app.callback(
+    Output("language-filter-label", "children"),
+    Output("year-filter-label", "children"),
+    Output("rating-filter-label", "children"),
+    Input("language-filter", "value"),
+    Input("year-filter", "value"),
+    Input("rating-filter", "value"),
+)
+def update_filter_labels(languages, year_range, min_rating):
+    language_label = "Todos" if not languages else f"{len(languages)} selecionado(s)"
+    return language_label, selected_period_label(year_range), selected_rating_label(min_rating)
+
+
+@app.callback(
     Output("filtered-metrics", "children"),
     Output("top-books-filtered", "figure"),
     Output("scatter-quality", "figure"),
@@ -328,6 +367,10 @@ def render_tab(tab):
 def update_exploration(languages, year_range, min_rating, ranking_metric):
     if not languages:
         languages = available_languages
+    if not year_range:
+        year_range = [min_year, max_year]
+    if min_rating is None:
+        min_rating = 0
 
     filtered = books_df[
         books_df["language_group"].isin(languages)
@@ -349,14 +392,14 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         metric_card("Livros filtrados", format_int(total_books), "apos filtros"),
         metric_card("Nota media", f"{avg_rating:.2f}", "media simples"),
         metric_card("Mediana de reviews", format_int(median_reviews), "texto escrito por leitores"),
-        metric_card("Marcados para ler", format_int(total_to_read), "demanda futura"),
+        metric_card("Querem ler", format_int(total_to_read), "demanda futura"),
     ]
 
     top = filtered.sort_values(ranking_metric, ascending=False).head(12)
     metric_label = {
         "popularity_score": "Score",
         "weighted_score": "Nota ponderada",
-        "to_read_count": "Marcados para ler",
+        "to_read_count": "Querem ler",
     }[ranking_metric]
     fig_top = px.bar(
         top.sort_values(ranking_metric),
@@ -365,7 +408,12 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         orientation="h",
         color="average_rating",
         color_continuous_scale="Blues",
-        hover_data=["primary_author", "publication_year", "ratings_count", "to_read_count"],
+        hover_data={
+            "primary_author": True,
+            "publication_year": True,
+            "ratings_count": ":,",
+            "to_read_count": ":,",
+        },
         labels={ranking_metric: metric_label, "title": "", "average_rating": "Nota media"},
         title=f"Top 12 por {metric_label.lower()}",
     )
@@ -384,7 +432,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         labels={
             "ratings_count": "Volume de avaliacoes",
             "average_rating": "Nota media",
-            "to_read_count": "Marcados para ler",
+            "to_read_count": "Querem ler",
             "language_group": "Idioma",
         },
         title="Nem todo livro popular tem a melhor nota",
@@ -452,18 +500,43 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
                 "language_group": "Idioma",
                 "average_rating": "Nota media",
                 "ratings_count": "Avaliacoes",
-                "to_read_count": "Para ler",
+                "to_read_count": "Querem ler",
                 "popularity_score": "Score",
             }
         )
     )
+    table_data = table_data.copy()
+    table_data["Ano"] = table_data["Ano"].fillna(0).astype(int).replace(0, "")
+    table_data["Nota media"] = table_data["Nota media"].map(lambda value: f"{value:.2f}")
+    table_data["Avaliacoes"] = table_data["Avaliacoes"].map(format_int)
+    table_data["Querem ler"] = table_data["Querem ler"].map(format_int)
+    table_data["Score"] = table_data["Score"].map(lambda value: f"{value:.2f}")
     table = dash_table.DataTable(
         data=table_data.to_dict("records"),
         columns=[{"name": column, "id": column} for column in table_data.columns],
         page_size=8,
-        style_cell={"fontFamily": "Segoe UI, Arial", "fontSize": 13, "padding": "8px", "textAlign": "left"},
-        style_header={"fontWeight": "700", "backgroundColor": "#F3F6FA"},
-        style_table={"overflowX": "auto"},
+        style_cell={
+            "fontFamily": "Segoe UI, Arial",
+            "fontSize": 13,
+            "padding": "10px 12px",
+            "textAlign": "left",
+            "border": "0",
+            "borderBottom": "1px solid #E6ECF4",
+            "whiteSpace": "normal",
+            "height": "auto",
+        },
+        style_header={
+            "fontWeight": "700",
+            "backgroundColor": "#EEF4F8",
+            "color": "#12263A",
+            "border": "0",
+            "borderBottom": "1px solid #D6E1EC",
+        },
+        style_data={"backgroundColor": "white", "color": "#263849"},
+        style_data_conditional=[
+            {"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFD"},
+        ],
+        style_table={"overflowX": "auto", "borderRadius": "8px", "overflow": "hidden"},
     )
 
     return metric_cards, fig_top, fig_scatter, fig_hist, fig_author, fig_box, table
@@ -480,7 +553,7 @@ app.index_string = """
         <style>
             body {
                 margin: 0;
-                background: #f5f7fb;
+                background: #eef3f8;
                 color: #1f2933;
                 font-family: "Segoe UI", Arial, sans-serif;
             }
@@ -488,13 +561,17 @@ app.index_string = """
                 min-height: 100vh;
             }
             .hero {
-                background: linear-gradient(135deg, #17324d 0%, #235789 58%, #2f855a 100%);
+                background:
+                    linear-gradient(135deg, rgba(14, 35, 54, 0.96) 0%, rgba(29, 83, 117, 0.94) 58%, rgba(43, 111, 91, 0.94) 100%),
+                    radial-gradient(circle at 88% 18%, rgba(242, 165, 65, 0.32), transparent 28%);
                 color: white;
-                padding: 36px 48px 32px;
+                padding: 34px 48px 28px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.16);
             }
             .hero h1 {
                 margin: 6px 0 8px;
-                font-size: clamp(30px, 4vw, 54px);
+                max-width: 980px;
+                font-size: 46px;
                 line-height: 1.05;
                 letter-spacing: 0;
             }
@@ -509,7 +586,7 @@ app.index_string = """
             .subtitle {
                 margin: 0;
                 max-width: 780px;
-                color: #e7eef8;
+                color: #dfeaf5;
                 font-size: 17px;
                 line-height: 1.45;
             }
@@ -517,13 +594,26 @@ app.index_string = """
                 background: white;
                 border-bottom: 1px solid #d9e1ec;
                 padding: 0 36px;
+                box-shadow: 0 8px 22px rgba(18, 38, 58, 0.04);
+            }
+            .tabs .tab {
+                border: 0 !important;
+                background: transparent !important;
+                color: #526477 !important;
+                font-weight: 650;
+                padding: 15px 18px !important;
+                transition: color 160ms ease, box-shadow 160ms ease;
+            }
+            .tabs .tab--selected {
+                color: #12263A !important;
+                box-shadow: inset 0 -3px 0 #F2A541;
             }
             .tab-content {
-                padding: 24px 36px 40px;
+                padding: 24px 36px 44px;
             }
             .metrics-grid {
                 display: grid;
-                grid-template-columns: repeat(4, minmax(160px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
                 gap: 14px;
                 margin-bottom: 18px;
             }
@@ -534,9 +624,16 @@ app.index_string = """
             .panel,
             .filters {
                 background: white;
-                border: 1px solid #dfe6ef;
+                border: 1px solid #dbe5ef;
                 border-radius: 8px;
-                box-shadow: 0 8px 24px rgba(31, 41, 51, 0.06);
+                box-shadow: 0 12px 30px rgba(18, 38, 58, 0.07);
+                transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+            }
+            .metric-card:hover,
+            .panel:hover,
+            .filters:hover {
+                border-color: #c7d7e6;
+                box-shadow: 0 16px 36px rgba(18, 38, 58, 0.1);
             }
             .metric-card {
                 padding: 16px;
@@ -561,7 +658,7 @@ app.index_string = """
                 gap: 18px;
             }
             .panel {
-                padding: 14px 16px 8px;
+                padding: 15px 16px 10px;
                 min-width: 0;
             }
             .panel h3,
@@ -584,20 +681,104 @@ app.index_string = """
                 top: 12px;
                 padding: 18px;
             }
+            .filters-title {
+                border-bottom: 1px solid #E2EAF2;
+                margin: -2px 0 16px;
+                padding-bottom: 12px;
+            }
+            .filters-title h3 {
+                margin-bottom: 4px;
+            }
+            .filters-title span {
+                color: #708295;
+                font-size: 12px;
+            }
+            .filter-label-row {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 12px;
+                margin: 16px 0 8px;
+            }
             .filters label {
                 display: block;
-                margin: 16px 0 8px;
+                margin: 0;
                 font-size: 13px;
                 font-weight: 700;
                 color: #334e68;
             }
+            .filter-label-row strong {
+                color: #235789;
+                font-size: 12px;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+            .Select-control,
+            .Select-menu-outer,
+            .Select-value,
+            .Select-placeholder {
+                border-color: #d7e2ec !important;
+                border-radius: 8px !important;
+                color: #263849 !important;
+            }
+            .Select-control {
+                min-height: 42px;
+                box-shadow: none !important;
+                transition: border-color 160ms ease, box-shadow 160ms ease;
+            }
+            .Select-control:hover {
+                border-color: #8fb2d4 !important;
+                box-shadow: 0 0 0 3px rgba(35, 87, 137, 0.08) !important;
+            }
+            .Select--multi .Select-value {
+                background: #EAF2F8 !important;
+                border: 1px solid #C9DAEA !important;
+                color: #17324d !important;
+            }
+            .rc-slider-track {
+                background-color: #235789;
+            }
+            .rc-slider-rail {
+                background-color: #DCE6F0;
+            }
+            .rc-slider-handle {
+                width: 18px;
+                height: 18px;
+                margin-top: -7px;
+                border: 3px solid #F2A541;
+                background: white;
+                box-shadow: 0 4px 12px rgba(18, 38, 58, 0.18);
+                transition: transform 120ms ease, box-shadow 120ms ease;
+            }
+            .rc-slider-handle:hover,
+            .rc-slider-handle:focus {
+                border-color: #F2A541;
+                transform: scale(1.05);
+                box-shadow: 0 0 0 5px rgba(242, 165, 65, 0.18);
+            }
+            .rc-slider-dot-active {
+                border-color: #235789;
+            }
             .radio-list label {
+                display: block;
                 margin: 8px 0;
-                font-weight: 500;
+                padding: 9px 10px;
+                border: 1px solid #DCE6F0;
+                border-radius: 8px;
+                background: #F8FAFD;
+                font-weight: 600;
+                transition: background 140ms ease, border-color 140ms ease;
+            }
+            .radio-list label:hover {
+                border-color: #AFC6DA;
+                background: #EEF5FA;
             }
             @media (max-width: 980px) {
                 .hero {
                     padding: 28px 22px;
+                }
+                .hero h1 {
+                    font-size: 31px;
                 }
                 .tabs,
                 .tab-content {
