@@ -7,6 +7,7 @@ from dash import Dash, Input, Output, dash_table, dcc, html
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data" / "processed"
+OPENLIBRARY_FILE = BASE_DIR / "data" / "external" / "openlibrary_books.csv"
 
 BOOKS_FILE = DATA_DIR / "books_enriched.csv"
 RATINGS_DIST_FILE = DATA_DIR / "ratings_distribution.csv"
@@ -19,6 +20,12 @@ PAGE_RANGE_ORDER = [
     "350 a 499 paginas",
     "500+ paginas",
     "Nao coletado",
+]
+RATINGS_VOLUME_ORDER = [
+    "Baixo alcance (<10 mil)",
+    "Medio alcance (10-99 mil)",
+    "Alto alcance (100-999 mil)",
+    "Massivo (1 mi+)",
 ]
 
 
@@ -119,6 +126,8 @@ def overview_tab():
     total_to_read = books_df["to_read_count"].sum()
     avg_rating = (books_df["average_rating"] * books_df["ratings_count"]).sum() / books_df["ratings_count"].sum()
     books_with_pages = books_df["page_count"].notna().sum() if "page_count" in books_df.columns else 0
+    books_found_openlibrary = books_df["openlibrary_found"].sum() if "openlibrary_found" in books_df.columns else 0
+    books_consulted_openlibrary = len(pd.read_csv(OPENLIBRARY_FILE)) if OPENLIBRARY_FILE.exists() else 0
 
     top_books = books_df.sort_values("popularity_score", ascending=False).head(10)
     fig_top = px.bar(
@@ -257,7 +266,9 @@ def overview_tab():
                     metric_card("Avaliacoes da amostra", format_int(total_ratings), "ratings.csv"),
                     metric_card("Querem ler", format_int(total_to_read), "interesse futuro"),
                     metric_card("Nota media ponderada", f"{avg_rating:.2f}", "peso por volume de ratings"),
-                    metric_card("Open Library", format_int(books_with_pages), "livros com paginas coletadas"),
+                    metric_card("Open Library consultados", format_int(books_consulted_openlibrary), "buscas por ISBN na API"),
+                    metric_card("Open Library encontrados", format_int(books_found_openlibrary), "livros encontrados na API"),
+                    metric_card("Paginas disponiveis", format_int(books_with_pages), "livros com page_count"),
                 ],
             ),
             html.Div(
@@ -356,9 +367,9 @@ def exploration_tab():
                         children=[
                             graph_card("Top livros no filtro", graph_id="top-books-filtered", class_name="panel wide"),
                             graph_card("Popularidade x nota media", graph_id="scatter-quality"),
-                            graph_card("Distribuicao das notas medias", graph_id="hist-average-rating"),
+                            graph_card("Notas por alcance", graph_id="hist-average-rating"),
                             graph_card("Autores com maior alcance", graph_id="author-bar"),
-                            graph_card("Notas por idioma", graph_id="box-language"),
+                            graph_card("Notas por tamanho do livro", graph_id="box-language"),
                             graph_card("Tabela para apresentacao", children=html.Div(id="book-table"), class_name="panel wide"),
                         ],
                     ),
@@ -537,16 +548,30 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     )
     fig_scatter = apply_theme(fig_scatter, 430)
 
+    reach_data = filtered.copy()
+    reach_data["ratings_volume_range"] = pd.cut(
+        reach_data["ratings_count"],
+        bins=[-1, 9_999, 99_999, 999_999, float("inf")],
+        labels=RATINGS_VOLUME_ORDER,
+    )
     fig_hist = px.histogram(
-        filtered,
+        reach_data,
         x="average_rating",
         nbins=30,
-        color="language_group",
-        labels={"average_rating": "Nota media", "count": "Livros"},
-        title="Concentracao das notas medias",
+        color="ratings_volume_range",
+        histnorm="percent",
+        barmode="overlay",
+        opacity=0.68,
+        category_orders={"ratings_volume_range": RATINGS_VOLUME_ORDER},
+        labels={
+            "average_rating": "Nota media",
+            "ratings_volume_range": "Faixa de avaliacoes",
+            "percent": "% de livros",
+        },
+        title="Distribuicao das notas por volume de avaliacoes",
     )
     fig_hist.update_traces(
-        hovertemplate="Nota media: %{x}<br>Livros: %{y}<extra></extra>"
+        hovertemplate="Nota media: %{x}<br>Livros: %{y:.1f}%<extra></extra>"
     )
     fig_hist = apply_theme(fig_hist)
 
@@ -572,18 +597,32 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     )
     fig_author = apply_theme(fig_author, 430)
 
-    fig_box = px.box(
-        filtered,
-        x="language_group",
-        y="average_rating",
-        points=False,
-        color="language_group",
-        labels={"language_group": "Idioma", "average_rating": "Nota media"},
-        title="Comparacao de notas por idioma",
+    page_box_data = filtered[
+        filtered["page_count"].notna()
+        & filtered["page_range"].notna()
+        & (filtered["page_range"] != "Nao coletado")
+    ].copy()
+    page_box_data["page_range"] = pd.Categorical(
+        page_box_data["page_range"],
+        categories=PAGE_RANGE_ORDER[:-1],
+        ordered=True,
     )
-    fig_box.update_traces(
-        hovertemplate="Idioma: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
-    )
+    if page_box_data.empty:
+        fig_box = px.scatter(title="Sem livros com paginas coletadas no recorte atual")
+    else:
+        fig_box = px.box(
+            page_box_data.sort_values("page_range"),
+            x="page_range",
+            y="average_rating",
+            points="outliers",
+            color="page_range",
+            category_orders={"page_range": PAGE_RANGE_ORDER[:-1]},
+            labels={"page_range": "Faixa de paginas", "average_rating": "Nota media"},
+            title="Comparacao de notas por tamanho do livro",
+        )
+        fig_box.update_traces(
+            hovertemplate="Faixa: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
+        )
     fig_box = apply_theme(fig_box)
 
     table_data = (
