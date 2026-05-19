@@ -43,6 +43,12 @@ books_df, ratings_distribution_df, authors_df = load_data()
 available_languages = sorted(books_df["language_group"].dropna().unique())
 min_year = int(books_df["publication_year"].dropna().min())
 max_year = int(books_df["publication_year"].dropna().max())
+year_marks = {min_year: str(min_year)}
+year_marks.update({
+    year: str(year)
+    for year in range(((min_year // 200) + 1) * 200, max_year + 1, 200)
+})
+rating_marks = {0: "Sem filtro", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5"}
 
 
 def apply_theme(fig, height=360):
@@ -74,8 +80,21 @@ def metric_card(label, value, note):
 
 
 def graph_card(title, graph_id=None, figure=None, children=None, class_name="panel"):
-    content = children if children is not None else dcc.Graph(id=graph_id, figure=figure, config={"displayModeBar": False})
+    graph_props = {"figure": figure, "config": {"displayModeBar": False}}
+    if graph_id is not None:
+        graph_props["id"] = graph_id
+    content = children if children is not None else dcc.Graph(**graph_props)
     return html.Div(className=class_name, children=[html.H3(title), content])
+
+
+def section_header(title, description):
+    return html.Div(
+        className="section-header",
+        children=[
+            html.H2(title),
+            html.P(description),
+        ],
+    )
 
 
 def format_int(value):
@@ -84,13 +103,13 @@ def format_int(value):
 
 def selected_period_label(year_range):
     if not year_range or year_range[0] <= min_year and year_range[1] >= max_year:
-        return "Todos os anos"
+        return "Todos"
     return f"{int(year_range[0])} a {int(year_range[1])}"
 
 
 def selected_rating_label(min_rating):
     if min_rating is None or min_rating <= 0:
-        return "Sem nota minima"
+        return "Sem minima"
     return f"Nota >= {min_rating:.1f}"
 
 
@@ -109,8 +128,25 @@ def overview_tab():
         orientation="h",
         color="average_rating",
         color_continuous_scale="Blues",
-        labels={"popularity_score": "Score de popularidade", "title": "", "average_rating": "Nota media"},
+        custom_data=["primary_author", "publication_year", "ratings_count", "to_read_count"],
+        labels={
+            "popularity_score": "Pontuacao de popularidade",
+            "title": "Livro",
+            "average_rating": "Nota media",
+        },
         title="Livros com melhor equilibrio entre alcance, avaliacao e interesse futuro",
+    )
+    fig_top.update_traces(
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Pontuacao: %{x:.2f}<br>"
+            "Nota media: %{marker.color:.2f}<br>"
+            "Autor: %{customdata[0]}<br>"
+            "Ano: %{customdata[1]:.0f}<br>"
+            "Avaliacoes: %{customdata[2]:,}<br>"
+            "Querem ler: %{customdata[3]:,}"
+            "<extra></extra>"
+        )
     )
     fig_top = apply_theme(fig_top, 430)
 
@@ -123,6 +159,9 @@ def overview_tab():
         title="Distribuicao geral das notas da amostra",
     )
     fig_dist.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig_dist.update_traces(
+        hovertemplate="Nota: %{x}<br>Participacao: %{y:.2f}%<extra></extra>"
+    )
     fig_dist = apply_theme(fig_dist)
 
     decade_summary = (
@@ -141,6 +180,9 @@ def overview_tab():
         labels={"decade": "Decada", "avg_rating": "Nota media"},
         title="Como a media de avaliacao varia por decada de publicacao",
     )
+    fig_decade.update_traces(
+        hovertemplate="Decada: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
+    )
     fig_decade = apply_theme(fig_decade)
 
     language_summary = (
@@ -157,6 +199,9 @@ def overview_tab():
         labels={"language_group": "Idioma", "books": "Livros", "avg_rating": "Nota media"},
         title="Composicao da base por idioma",
     )
+    fig_language.update_traces(
+        hovertemplate="Idioma: %{x}<br>Livros: %{y:,}<br>Nota media: %{marker.color:.2f}<extra></extra>"
+    )
     fig_language = apply_theme(fig_language)
 
     if "page_count" in books_df.columns and books_df["page_count"].notna().any():
@@ -171,15 +216,27 @@ def overview_tab():
             ordered=True,
         )
         page_summary = page_summary.sort_values("page_range")
-        fig_pages = px.bar(
+        page_summary["avg_rating_label"] = page_summary["avg_rating"].map(lambda value: f"{value:.2f}")
+        y_min = max(0, page_summary["avg_rating"].min() - 0.08)
+        y_max = min(5, page_summary["avg_rating"].max() + 0.08)
+        fig_pages = px.scatter(
             page_summary,
             x="page_range",
             y="avg_rating",
+            size="books",
             color="books",
+            text="avg_rating_label",
+            size_max=42,
             color_continuous_scale="Oranges",
             labels={"page_range": "Faixa de paginas", "avg_rating": "Nota media", "books": "Livros"},
             title="Metadados coletados: nota media por tamanho do livro",
         )
+        fig_pages.update_traces(
+            mode="markers+text",
+            textposition="top center",
+            hovertemplate="Faixa: %{x}<br>Nota media: %{y:.2f}<br>Livros: %{marker.color:,}<extra></extra>",
+        )
+        fig_pages.update_yaxes(range=[y_min, y_max])
     else:
         fig_pages = px.bar(
             title="Metadados coletados: rode collect_openlibrary_data.py para preencher paginas"
@@ -189,6 +246,10 @@ def overview_tab():
     return html.Div(
         className="tab-content",
         children=[
+            section_header(
+                "Visao Geral",
+                "Resumo executivo da base: volume, qualidade das avaliacoes, interesse futuro e metadados coletados.",
+            ),
             html.Div(
                 className="metrics-grid",
                 children=[
@@ -217,6 +278,10 @@ def exploration_tab():
     return html.Div(
         className="tab-content explore-layout",
         children=[
+            section_header(
+                "Exploracao Interativa",
+                "Use os filtros para investigar recortes especificos por idioma, periodo, nota minima e criterio de ranking.",
+            ),
             html.Aside(
                 className="filters",
                 children=[
@@ -235,38 +300,45 @@ def exploration_tab():
                         multi=True,
                         clearable=True,
                         placeholder="Todos os idiomas",
+                        search_value="",
+                        labels={
+                            "search": "Buscar",
+                            "select_all": "Selecionar todos",
+                            "deselect_all": "Limpar selecao",
+                            "selected_count": "selecionados",
+                            "clear_search": "Limpar busca",
+                            "clear_selection": "Limpar selecao",
+                            "no_options_found": "Nenhum idioma encontrado",
+                        },
                     ),
-                    html.Div(className="filter-label-row", children=[html.Label("Periodo de publicacao"), html.Strong(id="year-filter-label")]),
+                    html.Div(className="filter-label-row", children=[html.Label("Publicacao"), html.Strong(id="year-filter-label")]),
                     dcc.RangeSlider(
                         id="year-filter",
+                        className="filter-slider year-slider",
                         min=min_year,
                         max=max_year,
                         value=[min_year, max_year],
                         step=1,
-                        marks={
-                            min_year: str(min_year),
-                            1950: "1950",
-                            2000: "2000",
-                            max_year: str(max_year),
-                        },
+                        marks=year_marks,
                         tooltip={"placement": "bottom", "always_visible": False},
                         allowCross=False,
                     ),
-                    html.Div(className="filter-label-row", children=[html.Label("Nota media minima"), html.Strong(id="rating-filter-label")]),
+                    html.Div(className="filter-label-row", children=[html.Label("Nota minima"), html.Strong(id="rating-filter-label")]),
                     dcc.Slider(
                         id="rating-filter",
+                        className="filter-slider rating-slider",
                         min=0,
                         max=5.0,
                         step=0.1,
                         value=0,
-                        marks={0: "Sem filtro", 2.5: "2.5", 3.5: "3.5", 4.5: "4.5", 5.0: "5.0"},
+                        marks=rating_marks,
                         tooltip={"placement": "bottom", "always_visible": False},
                     ),
                     html.Label("Ordenar ranking por"),
                     dcc.RadioItems(
                         id="ranking-metric",
                         options=[
-                            {"label": "Score", "value": "popularity_score"},
+                            {"label": "Pontuacao geral", "value": "popularity_score"},
                             {"label": "Nota ponderada", "value": "weighted_score"},
                             {"label": "Querem ler", "value": "to_read_count"},
                         ],
@@ -287,7 +359,7 @@ def exploration_tab():
                             graph_card("Distribuicao das notas medias", graph_id="hist-average-rating"),
                             graph_card("Autores com maior alcance", graph_id="author-bar"),
                             graph_card("Notas por idioma", graph_id="box-language"),
-                            graph_card("Tabela para apresentacao", graph_id="book-table", class_name="panel wide"),
+                            graph_card("Tabela para apresentacao", children=html.Div(id="book-table"), class_name="panel wide"),
                         ],
                     ),
                 ],
@@ -372,11 +444,15 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     if min_rating is None:
         min_rating = 0
 
-    filtered = books_df[
-        books_df["language_group"].isin(languages)
-        & books_df["publication_year"].between(year_range[0], year_range[1])
-        & (books_df["average_rating"] >= min_rating)
-    ].copy()
+    language_mask = books_df["language_group"].isin(languages)
+    rating_mask = books_df["average_rating"] >= min_rating
+    all_years_selected = year_range[0] <= min_year and year_range[1] >= max_year
+    if all_years_selected:
+        year_mask = pd.Series(True, index=books_df.index)
+    else:
+        year_mask = books_df["publication_year"].between(year_range[0], year_range[1])
+
+    filtered = books_df[language_mask & year_mask & rating_mask].copy()
 
     if filtered.empty:
         empty_fig = apply_theme(px.scatter(title="Nenhum livro encontrado com os filtros atuais"))
@@ -397,7 +473,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
 
     top = filtered.sort_values(ranking_metric, ascending=False).head(12)
     metric_label = {
-        "popularity_score": "Score",
+        "popularity_score": "Pontuacao geral",
         "weighted_score": "Nota ponderada",
         "to_read_count": "Querem ler",
     }[ranking_metric]
@@ -408,34 +484,56 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         orientation="h",
         color="average_rating",
         color_continuous_scale="Blues",
-        hover_data={
-            "primary_author": True,
-            "publication_year": True,
-            "ratings_count": ":,",
-            "to_read_count": ":,",
-        },
+        custom_data=["primary_author", "publication_year", "ratings_count", "to_read_count", "weighted_score"],
         labels={ranking_metric: metric_label, "title": "", "average_rating": "Nota media"},
         title=f"Top 12 por {metric_label.lower()}",
     )
+    fig_top.update_traces(
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            f"{metric_label}: " + "%{x:,.2f}<br>"
+            "Nota media: %{marker.color:.2f}<br>"
+            "Autor: %{customdata[0]}<br>"
+            "Ano: %{customdata[1]:.0f}<br>"
+            "Avaliacoes: %{customdata[2]:,}<br>"
+            "Querem ler: %{customdata[3]:,}<br>"
+            "Nota ponderada: %{customdata[4]:.2f}"
+            "<extra></extra>"
+        )
+    )
     fig_top = apply_theme(fig_top, 460)
 
-    scatter_sample = filtered.sort_values("ratings_count", ascending=False).head(1500)
     fig_scatter = px.scatter(
-        scatter_sample,
+        filtered,
         x="ratings_count",
         y="average_rating",
         size="to_read_count",
         color="language_group",
         hover_name="title",
-        hover_data=["primary_author", "publication_year", "weighted_score"],
+        custom_data=["primary_author", "publication_year", "weighted_score", "to_read_count"],
         log_x=True,
+        opacity=0.68,
+        size_max=34,
+        render_mode="webgl",
         labels={
             "ratings_count": "Volume de avaliacoes",
             "average_rating": "Nota media",
             "to_read_count": "Querem ler",
             "language_group": "Idioma",
         },
-        title="Nem todo livro popular tem a melhor nota",
+        title="Relacao entre popularidade e nota media",
+    )
+    fig_scatter.update_traces(
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "Autor: %{customdata[0]}<br>"
+            "Ano: %{customdata[1]:.0f}<br>"
+            "Avaliacoes: %{x:,}<br>"
+            "Nota media: %{y:.2f}<br>"
+            "Nota ponderada: %{customdata[2]:.2f}<br>"
+            "Querem ler: %{customdata[3]:,}"
+            "<extra></extra>"
+        )
     )
     fig_scatter = apply_theme(fig_scatter, 430)
 
@@ -446,6 +544,9 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         color="language_group",
         labels={"average_rating": "Nota media", "count": "Livros"},
         title="Concentracao das notas medias",
+    )
+    fig_hist.update_traces(
+        hovertemplate="Nota media: %{x}<br>Livros: %{y}<extra></extra>"
     )
     fig_hist = apply_theme(fig_hist)
 
@@ -466,6 +567,9 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         labels={"total_ratings": "Avaliacoes", "primary_author": "", "avg_rating": "Nota media"},
         title="Autores com mais alcance no recorte",
     )
+    fig_author.update_traces(
+        hovertemplate="Autor: %{y}<br>Avaliacoes: %{x:,}<br>Nota media: %{marker.color:.2f}<extra></extra>"
+    )
     fig_author = apply_theme(fig_author, 430)
 
     fig_box = px.box(
@@ -476,6 +580,9 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         color="language_group",
         labels={"language_group": "Idioma", "average_rating": "Nota media"},
         title="Comparacao de notas por idioma",
+    )
+    fig_box.update_traces(
+        hovertemplate="Idioma: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
     )
     fig_box = apply_theme(fig_box)
 
@@ -501,7 +608,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
                 "average_rating": "Nota media",
                 "ratings_count": "Avaliacoes",
                 "to_read_count": "Querem ler",
-                "popularity_score": "Score",
+                "popularity_score": "Pontuacao",
             }
         )
     )
@@ -510,7 +617,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     table_data["Nota media"] = table_data["Nota media"].map(lambda value: f"{value:.2f}")
     table_data["Avaliacoes"] = table_data["Avaliacoes"].map(format_int)
     table_data["Querem ler"] = table_data["Querem ler"].map(format_int)
-    table_data["Score"] = table_data["Score"].map(lambda value: f"{value:.2f}")
+    table_data["Pontuacao"] = table_data["Pontuacao"].map(lambda value: f"{value:.2f}")
     table = dash_table.DataTable(
         data=table_data.to_dict("records"),
         columns=[{"name": column, "id": column} for column in table_data.columns],
@@ -611,6 +718,28 @@ app.index_string = """
             .tab-content {
                 padding: 24px 36px 44px;
             }
+            .section-header {
+                grid-column: 1 / -1;
+                margin: 0 0 18px;
+                padding: 18px 20px;
+                background: linear-gradient(90deg, #ffffff 0%, #f7fbff 100%);
+                border: 1px solid #dbe5ef;
+                border-left: 5px solid #F2A541;
+                border-radius: 8px;
+                box-shadow: 0 10px 26px rgba(18, 38, 58, 0.06);
+            }
+            .section-header h2 {
+                margin: 0 0 5px;
+                color: #12263A;
+                font-size: 22px;
+                line-height: 1.2;
+            }
+            .section-header p {
+                margin: 0;
+                color: #5F7285;
+                font-size: 14px;
+                line-height: 1.45;
+            }
             .metrics-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
@@ -672,7 +801,7 @@ app.index_string = """
             }
             .explore-layout {
                 display: grid;
-                grid-template-columns: 280px minmax(0, 1fr);
+                grid-template-columns: 340px minmax(0, 1fr);
                 gap: 18px;
                 align-items: start;
             }
@@ -695,10 +824,10 @@ app.index_string = """
             }
             .filter-label-row {
                 display: flex;
-                align-items: baseline;
+                align-items: flex-start;
                 justify-content: space-between;
                 gap: 12px;
-                margin: 16px 0 8px;
+                margin: 18px 0 10px;
             }
             .filters label {
                 display: block;
@@ -706,11 +835,14 @@ app.index_string = """
                 font-size: 13px;
                 font-weight: 700;
                 color: #334e68;
+                line-height: 1.25;
             }
             .filter-label-row strong {
                 color: #235789;
                 font-size: 12px;
                 font-weight: 800;
+                line-height: 1.25;
+                text-align: right;
                 white-space: nowrap;
             }
             .Select-control,
@@ -738,6 +870,37 @@ app.index_string = """
             .rc-slider-track {
                 background-color: #235789;
             }
+            .filter-slider {
+                margin: 8px 14px 34px;
+            }
+            .filter-slider .rc-slider-mark {
+                top: 20px;
+                font-size: 11px;
+                color: #60758A;
+            }
+            .filter-slider .rc-slider-dot {
+                bottom: -3px;
+                width: 5px;
+                height: 5px;
+                border-color: #D3DDE8;
+            }
+            .year-slider .rc-slider-mark-text:first-child {
+                transform: translateX(-50%) !important;
+                text-align: center;
+            }
+            .year-slider .rc-slider-mark-text:last-child {
+                transform: translateX(-50%) !important;
+                text-align: center;
+            }
+            .rating-slider .rc-slider-mark-text:first-child {
+                transform: translateX(-8%) !important;
+                text-align: left;
+                min-width: 72px;
+            }
+            .rating-slider .rc-slider-mark-text:last-child {
+                transform: translateX(-50%) !important;
+                text-align: right;
+            }
             .rc-slider-rail {
                 background-color: #DCE6F0;
             }
@@ -762,11 +925,12 @@ app.index_string = """
             .radio-list label {
                 display: block;
                 margin: 8px 0;
-                padding: 9px 10px;
+                padding: 10px 12px;
                 border: 1px solid #DCE6F0;
                 border-radius: 8px;
                 background: #F8FAFD;
                 font-weight: 600;
+                line-height: 1.35;
                 transition: background 140ms ease, border-color 140ms ease;
             }
             .radio-list label:hover {
