@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
-from dash import Dash, Input, Output, dash_table, dcc, html
+from dash import Dash, Input, Output, dcc, html
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -13,7 +13,7 @@ BOOKS_FILE = DATA_DIR / "books_enriched.csv"
 RATINGS_DIST_FILE = DATA_DIR / "ratings_distribution.csv"
 AUTHOR_FILE = DATA_DIR / "author_summary.csv"
 
-COLORWAY = ["#235789", "#F2A541", "#3A7D44", "#D1495B", "#6C757D", "#7B2CBF"]
+COLORWAY = ["#235789", "#5E8FB3", "#D1495B", "#6C757D", "#7B2CBF", "#102A43"]
 PAGE_RANGE_ORDER = [
     "Ate 199 paginas",
     "200 a 349 paginas",
@@ -63,12 +63,12 @@ def apply_theme(fig, height=360):
         template="plotly_white",
         colorway=COLORWAY,
         height=height,
-        margin=dict(l=34, r=24, t=58, b=42),
-        font=dict(family="Segoe UI, Arial, sans-serif", size=13),
+        margin=dict(l=26, r=18, t=44, b=34),
+        font=dict(family="Segoe UI, Arial, sans-serif", size=12),
         legend_title_text="",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        title_font=dict(size=17, color="#12263A"),
+        title_font=dict(size=15, color="#12263A"),
     )
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D8E0EA", tickfont=dict(color="#526477"))
     fig.update_yaxes(gridcolor="#E7EDF5", zeroline=False, linecolor="#D8E0EA", tickfont=dict(color="#526477"))
@@ -157,7 +157,7 @@ def overview_tab():
             "<extra></extra>"
         )
     )
-    fig_top = apply_theme(fig_top, 430)
+    fig_top = apply_theme(fig_top, 270)
 
     fig_dist = px.bar(
         ratings_distribution_df,
@@ -167,11 +167,13 @@ def overview_tab():
         labels={"rating": "Nota", "percent": "% das avaliacoes"},
         title="Distribuicao geral das notas da amostra",
     )
-    fig_dist.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     fig_dist.update_traces(
-        hovertemplate="Nota: %{x}<br>Participacao: %{y:.2f}%<extra></extra>"
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+        marker_color="#5E8FB3",
+        hovertemplate="Nota: %{x}<br>Participacao: %{y:.2f}%<extra></extra>",
     )
-    fig_dist = apply_theme(fig_dist)
+    fig_dist = apply_theme(fig_dist, 196)
 
     decade_summary = (
         books_df.query("decade != 'Nao informado'")
@@ -192,76 +194,21 @@ def overview_tab():
     fig_decade.update_traces(
         hovertemplate="Decada: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
     )
-    fig_decade = apply_theme(fig_decade)
-
-    language_summary = (
-        books_df.groupby("language_group", as_index=False)
-        .agg(books=("book_id", "count"), avg_rating=("average_rating", "mean"))
-        .sort_values("books", ascending=False)
-    )
-    fig_language = px.bar(
-        language_summary,
-        x="language_group",
-        y="books",
-        color="avg_rating",
-        color_continuous_scale="Greens",
-        labels={"language_group": "Idioma", "books": "Livros", "avg_rating": "Nota media"},
-        title="Composicao da base por idioma",
-    )
-    fig_language.update_traces(
-        hovertemplate="Idioma: %{x}<br>Livros: %{y:,}<br>Nota media: %{marker.color:.2f}<extra></extra>"
-    )
-    fig_language = apply_theme(fig_language)
-
-    if "page_count" in books_df.columns and books_df["page_count"].notna().any():
-        page_summary = (
-            books_df.dropna(subset=["page_count"])
-            .groupby("page_range", as_index=False)
-            .agg(books=("book_id", "count"), avg_rating=("average_rating", "mean"), avg_score=("popularity_score", "mean"))
-        )
-        page_summary["page_range"] = pd.Categorical(
-            page_summary["page_range"],
-            categories=PAGE_RANGE_ORDER,
-            ordered=True,
-        )
-        page_summary = page_summary.sort_values("page_range")
-        page_summary["avg_rating_label"] = page_summary["avg_rating"].map(lambda value: f"{value:.2f}")
-        y_min = max(0, page_summary["avg_rating"].min() - 0.08)
-        y_max = min(5, page_summary["avg_rating"].max() + 0.08)
-        fig_pages = px.scatter(
-            page_summary,
-            x="page_range",
-            y="avg_rating",
-            size="books",
-            color="books",
-            text="avg_rating_label",
-            size_max=42,
-            color_continuous_scale="Oranges",
-            labels={"page_range": "Faixa de paginas", "avg_rating": "Nota media", "books": "Livros"},
-            title="Metadados coletados: nota media por tamanho do livro",
-        )
-        fig_pages.update_traces(
-            mode="markers+text",
-            textposition="top center",
-            hovertemplate="Faixa: %{x}<br>Nota media: %{y:.2f}<br>Livros: %{marker.color:,}<extra></extra>",
-        )
-        fig_pages.update_yaxes(range=[y_min, y_max])
-    else:
-        fig_pages = px.bar(
-            title="Metadados coletados: rode collect_openlibrary_data.py para preencher paginas"
-        )
-    fig_pages = apply_theme(fig_pages)
+    fig_decade = apply_theme(fig_decade, 196)
 
     return html.Div(
-        className="tab-content",
+        className="tab-content overview-layout",
         children=[
-            section_header(
-                "Visao Geral",
-                "Resumo executivo da base: volume, qualidade das avaliacoes, interesse futuro e metadados coletados.",
-            ),
-            html.Div(
-                className="metrics-grid",
+            html.Aside(
+                className="overview-sidebar",
                 children=[
+                    html.Div(
+                        className="sidebar-title",
+                        children=[
+                            html.H2("Visao Geral"),
+                            html.P("Resumo da base e indicadores principais."),
+                        ],
+                    ),
                     metric_card("Livros analisados", format_int(total_books), "catalogo integrado"),
                     metric_card("Avaliacoes da amostra", format_int(total_ratings), "ratings.csv"),
                     metric_card("Querem ler", format_int(total_to_read), "interesse futuro"),
@@ -269,16 +216,17 @@ def overview_tab():
                     metric_card("Open Library consultados", format_int(books_consulted_openlibrary), "buscas por ISBN na API"),
                     metric_card("Open Library encontrados", format_int(books_found_openlibrary), "livros encontrados na API"),
                     metric_card("Paginas disponiveis", format_int(books_with_pages), "livros com page_count"),
+                    # Tabs injected here via CSS — the real dcc.Tabs lives in app.layout
+                    # but is visually repositioned into the sidebar using fixed positioning trick
+                    html.Div(id="sidebar-tabs-anchor", className="sidebar-tabs-anchor"),
                 ],
             ),
             html.Div(
-                className="grid-2",
+                className="overview-main",
                 children=[
                     graph_card("Ranking executivo", figure=fig_top, class_name="panel wide"),
                     graph_card("Distribuicao de notas", figure=fig_dist),
                     graph_card("Evolucao por decada", figure=fig_decade),
-                    graph_card("Idiomas da base", figure=fig_language),
-                    graph_card("Tamanho dos livros", figure=fig_pages, class_name="panel wide"),
                 ],
             ),
         ],
@@ -289,10 +237,6 @@ def exploration_tab():
     return html.Div(
         className="tab-content explore-layout",
         children=[
-            section_header(
-                "Exploracao Interativa",
-                "Use os filtros para investigar recortes especificos por idioma, periodo, nota minima e criterio de ranking.",
-            ),
             html.Aside(
                 className="filters",
                 children=[
@@ -312,15 +256,6 @@ def exploration_tab():
                         clearable=True,
                         placeholder="Todos os idiomas",
                         search_value="",
-                        labels={
-                            "search": "Buscar",
-                            "select_all": "Selecionar todos",
-                            "deselect_all": "Limpar selecao",
-                            "selected_count": "selecionados",
-                            "clear_search": "Limpar busca",
-                            "clear_selection": "Limpar selecao",
-                            "no_options_found": "Nenhum idioma encontrado",
-                        },
                     ),
                     html.Div(className="filter-label-row", children=[html.Label("Publicacao"), html.Strong(id="year-filter-label")]),
                     dcc.RangeSlider(
@@ -369,8 +304,7 @@ def exploration_tab():
                             graph_card("Popularidade x nota media", graph_id="scatter-quality"),
                             graph_card("Notas por alcance", graph_id="hist-average-rating"),
                             graph_card("Autores com maior alcance", graph_id="author-bar"),
-                            graph_card("Notas por tamanho do livro", graph_id="box-language"),
-                            graph_card("Tabela para apresentacao", children=html.Div(id="book-table"), class_name="panel wide"),
+                            graph_card("Tamanho, nota e interesse", graph_id="bubble-pages"),
                         ],
                     ),
                 ],
@@ -382,31 +316,39 @@ def exploration_tab():
 app = Dash(__name__, title="Dashboard Goodreads", suppress_callback_exceptions=True)
 server = app.server
 
+# ─────────────────────────────────────────────────────────────────────────────
+# IMPORTANT: dcc.Tabs MUST live here in the permanent layout so Dash can always
+# find the component. The tabs are visually moved into the sidebar via CSS.
+# ─────────────────────────────────────────────────────────────────────────────
 app.layout = html.Div(
     className="app-shell",
     children=[
         html.Header(
-            className="hero",
+            className="topbar",
             children=[
                 html.Div(
+                    className="brand-block",
                     children=[
-                        html.P("Projeto final - Estudos Avancados de Banco de Dados", className="eyebrow"),
-                        html.H1("O que torna um livro popular e bem avaliado?"),
-                        html.P(
-                            "Dashboard interativo com dados Goodreads: livros, avaliacoes de usuarios e interesse futuro de leitura.",
-                            className="subtitle",
-                        ),
-                    ]
+                        html.P("Goodreads + Open Library", className="eyebrow"),
+                        html.H1("Popularidade e avaliacao de livros"),
+                    ],
                 ),
             ],
         ),
-        dcc.Tabs(
-            id="tabs",
-            value="overview",
-            className="tabs",
+        # Tabs are placed here but CSS moves them into the sidebar visually
+        html.Div(
+            id="tabs-portal",
+            className="tabs-portal",
             children=[
-                dcc.Tab(label="Dashboard 1 - Visao Geral", value="overview"),
-                dcc.Tab(label="Dashboard 2 - Exploracao Interativa", value="exploration"),
+                dcc.Tabs(
+                    id="tabs",
+                    value="overview",
+                    className="tabs sidebar-tabs",
+                    children=[
+                        dcc.Tab(label="Dashboard 1", value="overview"),
+                        dcc.Tab(label="Dashboard 2", value="exploration"),
+                    ],
+                ),
             ],
         ),
         html.Main(id="tab-body"),
@@ -440,8 +382,7 @@ def update_filter_labels(languages, year_range, min_rating):
     Output("scatter-quality", "figure"),
     Output("hist-average-rating", "figure"),
     Output("author-bar", "figure"),
-    Output("box-language", "figure"),
-    Output("book-table", "children"),
+    Output("bubble-pages", "figure"),
     Input("language-filter", "value"),
     Input("year-filter", "value"),
     Input("rating-filter", "value"),
@@ -467,8 +408,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
 
     if filtered.empty:
         empty_fig = apply_theme(px.scatter(title="Nenhum livro encontrado com os filtros atuais"))
-        empty_table = html.P("Ajuste os filtros para visualizar os dados.")
-        return [], empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_table
+        return [], empty_fig, empty_fig, empty_fig, empty_fig, empty_fig
 
     total_books = len(filtered)
     avg_rating = filtered["average_rating"].mean()
@@ -588,7 +528,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
         y="primary_author",
         orientation="h",
         color="avg_rating",
-        color_continuous_scale="Greens",
+        color_continuous_scale=["#D8EAF5", "#5E8FB3", "#235789", "#102A43"],
         labels={"total_ratings": "Avaliacoes", "primary_author": "", "avg_rating": "Nota media"},
         title="Autores com mais alcance no recorte",
     )
@@ -597,95 +537,64 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     )
     fig_author = apply_theme(fig_author, 430)
 
-    page_box_data = filtered[
+    # ── BUBBLE CHART replaces boxplot ────────────────────────────────────────
+    page_range_data = filtered[
         filtered["page_count"].notna()
         & filtered["page_range"].notna()
         & (filtered["page_range"] != "Nao coletado")
     ].copy()
-    page_box_data["page_range"] = pd.Categorical(
-        page_box_data["page_range"],
-        categories=PAGE_RANGE_ORDER[:-1],
-        ordered=True,
-    )
-    if page_box_data.empty:
-        fig_box = px.scatter(title="Sem livros com paginas coletadas no recorte atual")
+
+    if page_range_data.empty:
+        fig_bubble = apply_theme(px.scatter(title="Sem livros com paginas coletadas no recorte atual"))
     else:
-        fig_box = px.box(
-            page_box_data.sort_values("page_range"),
+        bubble_summary = (
+            page_range_data.groupby("page_range", as_index=False)
+            .agg(
+                avg_rating=("average_rating", "mean"),
+                total_books=("book_id", "count"),
+                avg_to_read=("to_read_count", "mean"),
+            )
+        )
+        bubble_summary["page_range"] = pd.Categorical(
+            bubble_summary["page_range"],
+            categories=PAGE_RANGE_ORDER[:-1],
+            ordered=True,
+        )
+        bubble_summary = bubble_summary.sort_values("page_range")
+
+        fig_bubble = px.scatter(
+            bubble_summary,
             x="page_range",
-            y="average_rating",
-            points="outliers",
-            color="page_range",
+            y="avg_rating",
+            size="total_books",
+            color="avg_to_read",
+            text="avg_rating",
+            size_max=52,
+            color_continuous_scale=["#D8EAF5", "#5E8FB3", "#235789", "#102A43"],
             category_orders={"page_range": PAGE_RANGE_ORDER[:-1]},
-            labels={"page_range": "Faixa de paginas", "average_rating": "Nota media"},
-            title="Comparacao de notas por tamanho do livro",
+            labels={
+                "page_range": "Faixa de paginas",
+                "avg_rating": "Nota media",
+                "total_books": "Qtd. livros",
+                "avg_to_read": "Media querem ler",
+            },
+            title="Tamanho do livro: nota media, volume e interesse futuro",
         )
-        fig_box.update_traces(
-            hovertemplate="Faixa: %{x}<br>Nota media: %{y:.2f}<extra></extra>"
+        fig_bubble.update_traces(
+            texttemplate="%{text:.2f}",
+            textposition="top center",
+            hovertemplate=(
+                "Faixa: %{x}<br>"
+                "Nota media: %{y:.2f}<br>"
+                "Livros: %{marker.size:,}<br>"
+                "Media querem ler: %{marker.color:.0f}"
+                "<extra></extra>"
+            ),
         )
-    fig_box = apply_theme(fig_box)
+        fig_bubble.update_layout(showlegend=False)
+    fig_bubble = apply_theme(fig_bubble, 380)
 
-    table_data = (
-        top[
-            [
-                "title",
-                "primary_author",
-                "publication_year",
-                "language_group",
-                "average_rating",
-                "ratings_count",
-                "to_read_count",
-                "popularity_score",
-            ]
-        ]
-        .rename(
-            columns={
-                "title": "Titulo",
-                "primary_author": "Autor",
-                "publication_year": "Ano",
-                "language_group": "Idioma",
-                "average_rating": "Nota media",
-                "ratings_count": "Avaliacoes",
-                "to_read_count": "Querem ler",
-                "popularity_score": "Pontuacao",
-            }
-        )
-    )
-    table_data = table_data.copy()
-    table_data["Ano"] = table_data["Ano"].fillna(0).astype(int).replace(0, "")
-    table_data["Nota media"] = table_data["Nota media"].map(lambda value: f"{value:.2f}")
-    table_data["Avaliacoes"] = table_data["Avaliacoes"].map(format_int)
-    table_data["Querem ler"] = table_data["Querem ler"].map(format_int)
-    table_data["Pontuacao"] = table_data["Pontuacao"].map(lambda value: f"{value:.2f}")
-    table = dash_table.DataTable(
-        data=table_data.to_dict("records"),
-        columns=[{"name": column, "id": column} for column in table_data.columns],
-        page_size=8,
-        style_cell={
-            "fontFamily": "Segoe UI, Arial",
-            "fontSize": 13,
-            "padding": "10px 12px",
-            "textAlign": "left",
-            "border": "0",
-            "borderBottom": "1px solid #E6ECF4",
-            "whiteSpace": "normal",
-            "height": "auto",
-        },
-        style_header={
-            "fontWeight": "700",
-            "backgroundColor": "#EEF4F8",
-            "color": "#12263A",
-            "border": "0",
-            "borderBottom": "1px solid #D6E1EC",
-        },
-        style_data={"backgroundColor": "white", "color": "#263849"},
-        style_data_conditional=[
-            {"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFD"},
-        ],
-        style_table={"overflowX": "auto", "borderRadius": "8px", "overflow": "hidden"},
-    )
-
-    return metric_cards, fig_top, fig_scatter, fig_hist, fig_author, fig_box, table
+    return metric_cards, fig_top, fig_scatter, fig_hist, fig_author, fig_bubble
 
 
 app.index_string = """
@@ -702,82 +611,158 @@ app.index_string = """
                 background: #eef3f8;
                 color: #1f2933;
                 font-family: "Segoe UI", Arial, sans-serif;
+                overflow: hidden;
             }
             .app-shell {
-                min-height: 100vh;
+                height: 100vh;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }
-            .hero {
-                background:
-                    linear-gradient(135deg, rgba(14, 35, 54, 0.96) 0%, rgba(29, 83, 117, 0.94) 58%, rgba(43, 111, 91, 0.94) 100%),
-                    radial-gradient(circle at 88% 18%, rgba(242, 165, 65, 0.32), transparent 28%);
+            #tab-body {
+                min-height: 0;
+                flex: 1 1 auto;
+                overflow: auto;
+            }
+
+            /* ── Topbar: taller, title centered ───────────────────────────── */
+            .topbar {
+                height: 64px;
+                flex: 0 0 64px;
+                box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 24px;
+                background: #102a43;
                 color: white;
-                padding: 34px 48px 28px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+                padding: 0 24px;
+                border-bottom: 2px solid rgba(255,255,255,0.1);
             }
-            .hero h1 {
-                margin: 6px 0 8px;
-                max-width: 980px;
-                font-size: 46px;
-                line-height: 1.05;
-                letter-spacing: 0;
+            /* When tabs portal is inside the topbar (dash2), keep it inline */
+            .topbar #tabs-portal {
+                flex-shrink: 0;
+            }
+            .brand-block {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+            }
+            .brand-block h1 {
+                margin: 0;
+                font-size: 18px;
+                font-weight: 700;
+                line-height: 1.15;
+                letter-spacing: 0.01em;
             }
             .eyebrow {
                 margin: 0;
-                font-size: 13px;
+                font-size: 10px;
                 text-transform: uppercase;
                 font-weight: 700;
-                letter-spacing: 0;
-                opacity: 0.86;
+                letter-spacing: 0.08em;
+                color: #a9c2da;
+                white-space: nowrap;
             }
-            .subtitle {
-                margin: 0;
-                max-width: 780px;
-                color: #dfeaf5;
-                font-size: 17px;
-                line-height: 1.45;
+
+            /* ── Tabs portal: hidden from normal flow, placed inside sidebar ─ */
+            .tabs-portal {
+                position: fixed;
+                /* Will be positioned by JS after render — fallback below */
+                bottom: -9999px;
+                left: -9999px;
+                width: 194px;   /* sidebar inner width: 218px - 2*8px padding - 2*1px border */
+                z-index: 10;
             }
-            .tabs {
-                background: white;
-                border-bottom: 1px solid #d9e1ec;
-                padding: 0 36px;
-                box-shadow: 0 8px 22px rgba(18, 38, 58, 0.04);
+            /* When the overview tab is active, the sidebar anchor is visible.
+               We reposition the portal using CSS: we target it when the
+               #sidebar-tabs-anchor exists (overview tab rendered). */
+            .sidebar-tabs {
+                display: flex !important;
+                background: #F0F5FA !important;
+                border: 1px solid #D3DDE8 !important;
+                border-radius: 8px !important;
+                padding: 3px !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
-            .tabs .tab {
+            .sidebar-tabs .tab {
                 border: 0 !important;
                 background: transparent !important;
                 color: #526477 !important;
                 font-weight: 650;
-                padding: 15px 18px !important;
-                transition: color 160ms ease, box-shadow 160ms ease;
+                padding: 6px 8px !important;
+                border-radius: 6px !important;
+                line-height: 1.2;
+                font-size: 12px !important;
+                flex: 1 1 0 !important;
+                text-align: center !important;
+                white-space: nowrap;
+                transition: color 160ms ease, background 160ms ease;
             }
-            .tabs .tab--selected {
-                color: #12263A !important;
-                box-shadow: inset 0 -3px 0 #F2A541;
+            .sidebar-tabs .tab--selected {
+                color: #ffffff !important;
+                background: #235789 !important;
+                box-shadow: 0 2px 6px rgba(35,87,137,0.28) !important;
             }
+            /* Anchor div that sits below the last metric card in the sidebar */
+            .sidebar-tabs-anchor {
+                margin-top: 6px;
+                padding-top: 8px;
+                border-top: 1px solid #E2EAF2;
+                min-height: 44px;
+            }
+
             .tab-content {
                 padding: 24px 36px 44px;
             }
-            .section-header {
-                grid-column: 1 / -1;
-                margin: 0 0 18px;
-                padding: 18px 20px;
-                background: linear-gradient(90deg, #ffffff 0%, #f7fbff 100%);
+            .overview-layout {
+                box-sizing: border-box;
+                height: 100%;
+                overflow: hidden;
+                display: grid;
+                grid-template-columns: 218px minmax(0, 1fr);
+                gap: 8px;
+                padding: 6px 12px;
+            }
+            .overview-sidebar {
+                min-height: 0;
+                overflow: hidden;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 5px;
+                align-content: start;
+                background: white;
                 border: 1px solid #dbe5ef;
-                border-left: 5px solid #F2A541;
                 border-radius: 8px;
-                box-shadow: 0 10px 26px rgba(18, 38, 58, 0.06);
+                box-shadow: 0 12px 30px rgba(18,38,58,0.07);
+                padding: 8px;
+                position: relative;
             }
-            .section-header h2 {
-                margin: 0 0 5px;
-                color: #12263A;
-                font-size: 22px;
-                line-height: 1.2;
+            .sidebar-title {
+                padding-bottom: 5px;
+                border-bottom: 1px solid #E2EAF2;
             }
-            .section-header p {
+            .sidebar-title h2 {
+                margin: 0 0 4px;
+                color: #102a43;
+                font-size: 18px;
+                line-height: 1.15;
+            }
+            .sidebar-title p {
                 margin: 0;
-                color: #5F7285;
-                font-size: 14px;
-                line-height: 1.45;
+                color: #66788a;
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            .overview-main {
+                min-height: 0;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr);
+                gap: 8px;
             }
             .metrics-grid {
                 display: grid;
@@ -794,14 +779,14 @@ app.index_string = """
                 background: white;
                 border: 1px solid #dbe5ef;
                 border-radius: 8px;
-                box-shadow: 0 12px 30px rgba(18, 38, 58, 0.07);
+                box-shadow: 0 12px 30px rgba(18,38,58,0.07);
                 transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
             }
             .metric-card:hover,
             .panel:hover,
             .filters:hover {
                 border-color: #c7d7e6;
-                box-shadow: 0 16px 36px rgba(18, 38, 58, 0.1);
+                box-shadow: 0 16px 36px rgba(18,38,58,0.1);
             }
             .metric-card {
                 padding: 16px;
@@ -810,15 +795,23 @@ app.index_string = """
                 flex-direction: column;
                 justify-content: space-between;
             }
+            .overview-sidebar .metric-card {
+                min-height: 0;
+                padding: 6px 8px;
+                box-shadow: none;
+            }
             .metric-label,
             .metric-note {
                 color: #66788a;
-                font-size: 12px;
+                font-size: 11px;
             }
             .metric-value {
                 font-size: 26px;
                 line-height: 1.2;
                 color: #102a43;
+            }
+            .overview-sidebar .metric-value {
+                font-size: 17px;
             }
             .grid-2 {
                 display: grid;
@@ -828,6 +821,11 @@ app.index_string = """
             .panel {
                 padding: 15px 16px 10px;
                 min-width: 0;
+                min-height: 0;
+            }
+            .overview-main .panel {
+                overflow: hidden;
+                padding: 6px 8px 2px;
             }
             .panel h3,
             .filters h3 {
@@ -835,9 +833,11 @@ app.index_string = """
                 font-size: 16px;
                 color: #102a43;
             }
-            .wide {
-                grid-column: span 2;
+            .overview-main .panel h3 {
+                margin-bottom: 4px;
+                font-size: 14px;
             }
+            .wide { grid-column: span 2; }
             .explore-layout {
                 display: grid;
                 grid-template-columns: 340px minmax(0, 1fr);
@@ -854,13 +854,8 @@ app.index_string = """
                 margin: -2px 0 16px;
                 padding-bottom: 12px;
             }
-            .filters-title h3 {
-                margin-bottom: 4px;
-            }
-            .filters-title span {
-                color: #708295;
-                font-size: 12px;
-            }
+            .filters-title h3 { margin-bottom: 4px; }
+            .filters-title span { color: #708295; font-size: 12px; }
             .filter-label-row {
                 display: flex;
                 align-items: flex-start;
@@ -899,68 +894,35 @@ app.index_string = """
             }
             .Select-control:hover {
                 border-color: #8fb2d4 !important;
-                box-shadow: 0 0 0 3px rgba(35, 87, 137, 0.08) !important;
+                box-shadow: 0 0 0 3px rgba(35,87,137,0.08) !important;
             }
             .Select--multi .Select-value {
                 background: #EAF2F8 !important;
                 border: 1px solid #C9DAEA !important;
                 color: #17324d !important;
             }
-            .rc-slider-track {
-                background-color: #235789;
-            }
-            .filter-slider {
-                margin: 8px 14px 34px;
-            }
-            .filter-slider .rc-slider-mark {
-                top: 20px;
-                font-size: 11px;
-                color: #60758A;
-            }
-            .filter-slider .rc-slider-dot {
-                bottom: -3px;
-                width: 5px;
-                height: 5px;
-                border-color: #D3DDE8;
-            }
-            .year-slider .rc-slider-mark-text:first-child {
-                transform: translateX(-50%) !important;
-                text-align: center;
-            }
-            .year-slider .rc-slider-mark-text:last-child {
-                transform: translateX(-50%) !important;
-                text-align: center;
-            }
-            .rating-slider .rc-slider-mark-text:first-child {
-                transform: translateX(-8%) !important;
-                text-align: left;
-                min-width: 72px;
-            }
-            .rating-slider .rc-slider-mark-text:last-child {
-                transform: translateX(-50%) !important;
-                text-align: right;
-            }
-            .rc-slider-rail {
-                background-color: #DCE6F0;
-            }
+            .rc-slider-track { background-color: #235789; }
+            .filter-slider { margin: 8px 14px 34px; }
+            .filter-slider .rc-slider-mark { top: 20px; font-size: 11px; color: #60758A; }
+            .filter-slider .rc-slider-dot { bottom: -3px; width: 5px; height: 5px; border-color: #D3DDE8; }
+            .year-slider .rc-slider-mark-text:first-child { transform: translateX(-50%) !important; text-align: center; }
+            .year-slider .rc-slider-mark-text:last-child  { transform: translateX(-50%) !important; text-align: center; }
+            .rating-slider .rc-slider-mark-text:first-child { transform: translateX(-8%) !important; text-align: left; min-width: 72px; }
+            .rating-slider .rc-slider-mark-text:last-child  { transform: translateX(-50%) !important; text-align: right; }
+            .rc-slider-rail { background-color: #DCE6F0; }
             .rc-slider-handle {
-                width: 18px;
-                height: 18px;
-                margin-top: -7px;
-                border: 3px solid #F2A541;
-                background: white;
-                box-shadow: 0 4px 12px rgba(18, 38, 58, 0.18);
+                width: 18px; height: 18px; margin-top: -7px;
+                border: 3px solid #5E8FB3; background: white;
+                box-shadow: 0 4px 12px rgba(18,38,58,0.18);
                 transition: transform 120ms ease, box-shadow 120ms ease;
             }
             .rc-slider-handle:hover,
             .rc-slider-handle:focus {
-                border-color: #F2A541;
+                border-color: #5E8FB3;
                 transform: scale(1.05);
-                box-shadow: 0 0 0 5px rgba(242, 165, 65, 0.18);
+                box-shadow: 0 0 0 5px rgba(94,143,179,0.18);
             }
-            .rc-slider-dot-active {
-                border-color: #235789;
-            }
+            .rc-slider-dot-active { border-color: #235789; }
             .radio-list label {
                 display: block;
                 margin: 8px 0;
@@ -972,33 +934,25 @@ app.index_string = """
                 line-height: 1.35;
                 transition: background 140ms ease, border-color 140ms ease;
             }
-            .radio-list label:hover {
-                border-color: #AFC6DA;
-                background: #EEF5FA;
-            }
+            .radio-list label:hover { border-color: #AFC6DA; background: #EEF5FA; }
+
             @media (max-width: 980px) {
-                .hero {
-                    padding: 28px 22px;
+                body { overflow: auto; }
+                .app-shell { height: auto; min-height: 100vh; overflow: visible; }
+                #tab-body { overflow: visible; }
+                .topbar { height: auto; flex: 0 0 auto; padding: 14px 16px; }
+                .brand-block h1 { font-size: 18px; }
+                .tab-content { padding-left: 16px; padding-right: 16px; }
+                .overview-layout {
+                    height: auto; min-height: calc(100vh - 104px);
+                    overflow: visible; grid-template-columns: 1fr; padding: 14px 16px;
                 }
-                .hero h1 {
-                    font-size: 31px;
-                }
-                .tabs,
-                .tab-content {
-                    padding-left: 16px;
-                    padding-right: 16px;
-                }
-                .metrics-grid,
-                .grid-2,
-                .explore-layout {
-                    grid-template-columns: 1fr;
-                }
-                .wide {
-                    grid-column: span 1;
-                }
-                .filters {
-                    position: static;
-                }
+                .overview-sidebar { overflow: visible; }
+                .overview-main { grid-template-columns: 1fr; grid-template-rows: auto; }
+                .metrics-grid, .grid-2, .explore-layout { grid-template-columns: 1fr; }
+                .wide { grid-column: span 1; }
+                .filters { position: static; }
+                .tabs-portal { position: static; width: 100%; bottom: auto; left: auto; }
             }
         </style>
     </head>
@@ -1009,6 +963,36 @@ app.index_string = """
             {%scripts%}
             {%renderer%}
         </footer>
+        <script>
+        function mountTabs() {
+            var portal  = document.getElementById('tabs-portal');
+            var anchor  = document.getElementById('sidebar-tabs-anchor');  // exists only on dash1
+            var topbar  = document.querySelector('.topbar');
+
+            if (!portal || !topbar) return;
+            portal.style.display = '';
+
+            if (anchor) {
+                // Dashboard 1: move into sidebar anchor
+                if (!anchor.contains(portal)) {
+                    portal.style.position = 'static';
+                    portal.style.width    = '100%';
+                    anchor.appendChild(portal);
+                }
+            } else {
+                // Dashboard 2: move into topbar (right side)
+                if (!topbar.contains(portal)) {
+                    portal.style.position = 'static';
+                    portal.style.width    = 'auto';
+                    topbar.appendChild(portal);
+                }
+            }
+        }
+
+        var observer = new MutationObserver(mountTabs);
+        observer.observe(document.body, { childList: true, subtree: true });
+        mountTabs();
+        </script>
     </body>
 </html>
 """
