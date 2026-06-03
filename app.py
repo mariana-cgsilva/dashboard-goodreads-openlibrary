@@ -216,9 +216,6 @@ def overview_tab():
                     metric_card("Open Library consultados", format_int(books_consulted_openlibrary), "buscas por ISBN na API"),
                     metric_card("Open Library encontrados", format_int(books_found_openlibrary), "livros encontrados na API"),
                     metric_card("Paginas disponiveis", format_int(books_with_pages), "livros com page_count"),
-                    # Tabs injected here via CSS — the real dcc.Tabs lives in app.layout
-                    # but is visually repositioned into the sidebar using fixed positioning trick
-                    html.Div(id="sidebar-tabs-anchor", className="sidebar-tabs-anchor"),
                 ],
             ),
             html.Div(
@@ -317,8 +314,9 @@ app = Dash(__name__, title="Dashboard Goodreads", suppress_callback_exceptions=T
 server = app.server
 
 # ─────────────────────────────────────────────────────────────────────────────
-# IMPORTANT: dcc.Tabs MUST live here in the permanent layout so Dash can always
-# find the component. The tabs are visually moved into the sidebar via CSS.
+# FIX: dcc.Tabs agora fica em uma barra fixa no RODAPE da tela (position: fixed;
+# bottom: 0). Isso garante que o switcher de tabs sempre apareça,
+# independentemente de qual tab está ativa ou de re-renders do #tab-body.
 # ─────────────────────────────────────────────────────────────────────────────
 app.layout = html.Div(
     className="app-shell",
@@ -335,15 +333,16 @@ app.layout = html.Div(
                 ),
             ],
         ),
-        # Tabs are placed here but CSS moves them into the sidebar visually
+        html.Main(id="tab-body"),
+        # Tabs fixas no rodapé — fora do #tab-body para nunca serem destruídas
         html.Div(
-            id="tabs-portal",
-            className="tabs-portal",
+            id="tabs-footer",
+            className="tabs-footer",
             children=[
                 dcc.Tabs(
                     id="tabs",
                     value="overview",
-                    className="tabs sidebar-tabs",
+                    className="tabs footer-tabs",
                     children=[
                         dcc.Tab(label="Dashboard 1", value="overview"),
                         dcc.Tab(label="Dashboard 2", value="exploration"),
@@ -351,7 +350,6 @@ app.layout = html.Div(
                 ),
             ],
         ),
-        html.Main(id="tab-body"),
     ],
 )
 
@@ -537,7 +535,7 @@ def update_exploration(languages, year_range, min_rating, ranking_metric):
     )
     fig_author = apply_theme(fig_author, 430)
 
-    # ── BUBBLE CHART replaces boxplot ────────────────────────────────────────
+    # ── BUBBLE CHART ────────────────────────────────────────────────────────
     page_range_data = filtered[
         filtered["page_count"].notna()
         & filtered["page_range"].notna()
@@ -623,9 +621,11 @@ app.index_string = """
                 min-height: 0;
                 flex: 1 1 auto;
                 overflow: auto;
+                /* Espaco para a barra de tabs fixa no rodapé não sobrepor conteúdo */
+                padding-bottom: 52px;
             }
 
-            /* ── Topbar: taller, title centered ───────────────────────────── */
+            /* ── Topbar ───────────────────────────────────────────────────── */
             .topbar {
                 height: 64px;
                 flex: 0 0 64px;
@@ -638,10 +638,6 @@ app.index_string = """
                 color: white;
                 padding: 0 24px;
                 border-bottom: 2px solid rgba(255,255,255,0.1);
-            }
-            /* When tabs portal is inside the topbar (dash2), keep it inline */
-            .topbar #tabs-portal {
-                flex-shrink: 0;
             }
             .brand-block {
                 display: flex;
@@ -666,53 +662,54 @@ app.index_string = """
                 white-space: nowrap;
             }
 
-            /* ── Tabs portal: hidden from normal flow, placed inside sidebar ─ */
-            .tabs-portal {
+            /* ── Barra de tabs FIXA no rodapé ─────────────────────────────
+               Fica fora do #tab-body, então nunca é destruída pelo Dash
+               quando troca de aba. Sempre visível em qualquer dashboard.
+            ─────────────────────────────────────────────────────────────── */
+            .tabs-footer {
                 position: fixed;
-                /* Will be positioned by JS after render — fallback below */
-                bottom: -9999px;
-                left: -9999px;
-                width: 194px;   /* sidebar inner width: 218px - 2*8px padding - 2*1px border */
-                z-index: 10;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 100;
+                background: #0d2236;
+                border-top: 1px solid rgba(255,255,255,0.10);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 6px 16px;
+                box-shadow: 0 -4px 18px rgba(16,42,67,0.18);
             }
-            /* When the overview tab is active, the sidebar anchor is visible.
-               We reposition the portal using CSS: we target it when the
-               #sidebar-tabs-anchor exists (overview tab rendered). */
-            .sidebar-tabs {
+            .footer-tabs {
                 display: flex !important;
-                background: #F0F5FA !important;
-                border: 1px solid #D3DDE8 !important;
+                background: rgba(255,255,255,0.07) !important;
+                border: 1px solid rgba(255,255,255,0.13) !important;
                 border-radius: 8px !important;
                 padding: 3px !important;
                 box-shadow: none !important;
-                width: 100% !important;
-                box-sizing: border-box !important;
+                width: auto !important;
+                gap: 2px;
             }
-            .sidebar-tabs .tab {
+            .footer-tabs .tab {
                 border: 0 !important;
                 background: transparent !important;
-                color: #526477 !important;
+                color: #a9c2da !important;
                 font-weight: 650;
-                padding: 6px 8px !important;
+                padding: 6px 28px !important;
                 border-radius: 6px !important;
                 line-height: 1.2;
-                font-size: 12px !important;
-                flex: 1 1 0 !important;
-                text-align: center !important;
+                font-size: 13px !important;
                 white-space: nowrap;
                 transition: color 160ms ease, background 160ms ease;
             }
-            .sidebar-tabs .tab--selected {
+            .footer-tabs .tab:hover {
+                color: #ffffff !important;
+                background: rgba(255,255,255,0.08) !important;
+            }
+            .footer-tabs .tab--selected {
                 color: #ffffff !important;
                 background: #235789 !important;
-                box-shadow: 0 2px 6px rgba(35,87,137,0.28) !important;
-            }
-            /* Anchor div that sits below the last metric card in the sidebar */
-            .sidebar-tabs-anchor {
-                margin-top: 6px;
-                padding-top: 8px;
-                border-top: 1px solid #E2EAF2;
-                min-height: 44px;
+                box-shadow: 0 2px 8px rgba(35,87,137,0.40) !important;
             }
 
             .tab-content {
@@ -939,7 +936,7 @@ app.index_string = """
             @media (max-width: 980px) {
                 body { overflow: auto; }
                 .app-shell { height: auto; min-height: 100vh; overflow: visible; }
-                #tab-body { overflow: visible; }
+                #tab-body { overflow: visible; padding-bottom: 64px; }
                 .topbar { height: auto; flex: 0 0 auto; padding: 14px 16px; }
                 .brand-block h1 { font-size: 18px; }
                 .tab-content { padding-left: 16px; padding-right: 16px; }
@@ -952,7 +949,7 @@ app.index_string = """
                 .metrics-grid, .grid-2, .explore-layout { grid-template-columns: 1fr; }
                 .wide { grid-column: span 1; }
                 .filters { position: static; }
-                .tabs-portal { position: static; width: 100%; bottom: auto; left: auto; }
+                .footer-tabs .tab { padding: 6px 16px !important; font-size: 12px !important; }
             }
         </style>
     </head>
@@ -963,36 +960,6 @@ app.index_string = """
             {%scripts%}
             {%renderer%}
         </footer>
-        <script>
-        function mountTabs() {
-            var portal  = document.getElementById('tabs-portal');
-            var anchor  = document.getElementById('sidebar-tabs-anchor');  // exists only on dash1
-            var topbar  = document.querySelector('.topbar');
-
-            if (!portal || !topbar) return;
-            portal.style.display = '';
-
-            if (anchor) {
-                // Dashboard 1: move into sidebar anchor
-                if (!anchor.contains(portal)) {
-                    portal.style.position = 'static';
-                    portal.style.width    = '100%';
-                    anchor.appendChild(portal);
-                }
-            } else {
-                // Dashboard 2: move into topbar (right side)
-                if (!topbar.contains(portal)) {
-                    portal.style.position = 'static';
-                    portal.style.width    = 'auto';
-                    topbar.appendChild(portal);
-                }
-            }
-        }
-
-        var observer = new MutationObserver(mountTabs);
-        observer.observe(document.body, { childList: true, subtree: true });
-        mountTabs();
-        </script>
     </body>
 </html>
 """
